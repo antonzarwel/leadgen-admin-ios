@@ -1,0 +1,17 @@
+{
+  "name": "leadgen-admin-ios",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lead Gen iPhone app: Capacitor shell around https://leadgen-admin-alpha.vercel.app/m",
+  "scripts": {
+    "sync": "cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/ios": "^8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2"
+  }
+}
