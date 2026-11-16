@@ -1,9 +1,7 @@
 node_modules/
-ios/App/build/
-ios/DerivedData/
-ios/App/App/public/
-ios/App/App/capacitor.config.json
-ios/App/App/config.xml
+ios/LeadGen/LeadGen.xcodeproj/
+DerivedData/
+build/
 *.p8
 *.ipa
 *.xcarchive

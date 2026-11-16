@@ -1,29 +1,27 @@
 # Lead Gen iPhone app
 
-Capacitor 8 shell (Swift Package Manager, no CocoaPods) around the owner dashboard at
-https://leadgen-admin-alpha.vercel.app/m.
+Native SwiftUI app for running the lead gen business. No web view.
 
-- App name: **Lead Gen**. Bundle id: `com.antonzarwel.leadgenadmin`. iPhone only, iOS 15+.
-- Loads the live site (`server.url` in `capacitor.config.json`), so web changes ship without a new build.
-  `www/` is only the offline fallback page.
-- Face ID lock (native, `ios/App/App/SceneDelegate.swift`, LocalAuthentication): locks every time the app goes to
-  the background and covers the screen in the app switcher. Falls back to the device passcode.
-- Login: the normal admin login page inside the app. The `lg_auth` cookie lasts 30 days.
+- App name: **Lead Gen**. Bundle id `com.antonzarwel.leadgenadmin`. iPhone, iOS 17+.
+- Project: `ios/LeadGen/project.yml` (XcodeGen). CI generates `LeadGen.xcodeproj`; it is not committed.
+- Data: read only JSON from leadgen-admin (`https://leadgen-admin-alpha.vercel.app`):
+  `POST /api/m/login` (password to token), `GET /api/m/summary`, `/api/m/leads?days=90`, `/api/m/clients`, `/api/m/sites`.
+  The token goes in `Authorization: Bearer`, it is kept in the Keychain, and rotating `ADMIN_SECRET` revokes it.
+- Last good responses are cached on device (Caches, file protection on), so the app opens instantly.
+- Face ID (or passcode) locks the app every time it goes to the background; the app switcher shows a cover.
 
-## Build and ship (GitHub Actions)
+## Screens
 
-`.github/workflows/testflight.yml` runs on `macos-26` (Xcode 26 is required for uploads), archives with
-automatic signing through the App Store Connect API key, and uploads to TestFlight (internal testing).
-Run it from the Actions tab (Run workflow) or push a `v*` tag.
+Today (KPIs, leads chart, latest leads), Leads (search, filters, day sections, swipe to call, detail),
+Clients (MRR, leads, unpaid, detail with chart, leads, sites, invoices, payments), Money (MRR, paid,
+unpaid and overdue, Wise or email dues, invoice draft queue), Sites (rented, free, own, leads, Search Console).
 
-Repo secrets: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` (full .p8 text), `APPLE_TEAM_ID`.
-The API key needs the Admin role (cloud managed distribution certificate).
+## Build and ship
 
-Before the first run, the App Store Connect app record must exist with bundle id
-`com.antonzarwel.leadgenadmin`, and the bundle id must be registered (automatic signing registers it
-if the key is Admin).
+`.github/workflows/testflight.yml` runs `bash ci/build.sh` on `macos-26` (Xcode 26) for every push to main
+that touches `ci/**` or `ios/**`. The script installs XcodeGen, archives unsigned, then exports with
+automatic App Store signing through the App Store Connect API key and uploads to TestFlight.
+Build number = 100 + run number.
 
-## Cost
-
-macOS minutes count 10x on private repos (2,000 free min/month = about 200 macOS min, roughly
-10 to 15 builds). A public repo builds free; this repo holds no secrets.
+Repo secrets: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `APPLE_TEAM_ID`.
+`package.json` and `package-lock.json` are stubs that only exist because the workflow's setup-node step wants a lockfile.
