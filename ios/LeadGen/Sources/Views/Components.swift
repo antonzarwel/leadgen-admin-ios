@@ -1,208 +1,631 @@
 import SwiftUI
 import Charts
 
-struct KPICard: View {
-    var title: String
-    var value: String
-    var subtitle: String?
-    var systemImage: String
-    var tint: Color = .accentColor
-    var trend: Int?
-    var trendUpIsGood = true
+// MARK: Numbers
+
+/// A number that counts up on first appear and rolls its digits on change.
+struct RollingNumber: View {
+    var value: Double
+    var format: (Double) -> String
+    @State private var shown: Double = 0
+    @State private var appeared = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(tint)
-                Text(title)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
+        Text(format(shown))
+            .contentTransition(.numericText(value: shown))
+            .monospacedDigit()
+            .onAppear {
+                guard !appeared else { return }
+                appeared = true
+                withAnimation(.spring(response: 0.9, dampingFraction: 0.9).delay(0.05)) { shown = value }
             }
-            Text(value)
-                .font(.title2.weight(.bold))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.55)
-                .contentTransition(.numericText())
-            HStack(spacing: 6) {
-                if let trend { TrendBadge(percent: trend, upIsGood: trendUpIsGood) }
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+            .onChange(of: value) { _, new in
+                withAnimation(.snappy) { shown = new }
+            }
+    }
+}
+
+struct DeltaChip: View {
+    var percent: Int?
+    var upIsGood = true
+    var onDark = false
+    var suffix: String? = nil
+
+    var body: some View {
+        if let p = percent {
+            let good = p == 0 ? true : (p > 0) == upIsGood
+            let color: Color = p == 0 ? .secondary : (good ? Theme.calls : Theme.bad)
+            HStack(spacing: 3) {
+                Image(systemName: p > 0 ? "arrow.up.right" : p < 0 ? "arrow.down.right" : "equal")
+                    .font(.caption2.weight(.heavy))
+                Text("\(abs(p))%")
+                if let suffix { Text(suffix).fontWeight(.medium).opacity(0.8) }
+            }
+            .font(.caption.weight(.bold))
+            .monospacedDigit()
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .foregroundStyle(onDark ? Color.white : color)
+            .background(onDark ? AnyShapeStyle(.white.opacity(0.18)) : AnyShapeStyle(color.opacity(0.14)), in: Capsule())
+            .accessibilityLabel(p >= 0 ? "Up \(p) percent" : "Down \(abs(p)) percent")
+        }
+    }
+}
+
+// MARK: Avatars and chips
+
+struct Avatar: View {
+    var name: String
+    var size: CGFloat = 40
+    var symbol: String = "person.fill"
+
+    var body: some View {
+        let colors = Theme.avatarColors(name)
+        Circle()
+            .fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+            .frame(width: size, height: size)
+            .overlay {
+                if let i = Fmt.initials(name) {
+                    Text(i)
+                        .font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                } else {
+                    Image(systemName: symbol)
+                        .font(.system(size: size * 0.4, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.95))
                 }
             }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .accessibilityElement(children: .combine)
+            .overlay { Circle().strokeBorder(.white.opacity(0.18), lineWidth: 0.5) }
+            .accessibilityHidden(true)
     }
 }
 
-struct TrendBadge: View {
-    var percent: Int
-    var upIsGood = true
-
-    private var good: Bool { percent == 0 ? true : (percent > 0) == upIsGood }
-
-    var body: some View {
-        HStack(spacing: 2) {
-            Image(systemName: percent > 0 ? "arrow.up.right" : percent < 0 ? "arrow.down.right" : "arrow.right")
-            Text("\(abs(percent))%")
-        }
-        .font(.caption.weight(.semibold))
-        .monospacedDigit()
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .foregroundStyle(percent == 0 ? Color.secondary : (good ? Color.green : Color.red))
-        .background((percent == 0 ? Color.gray : (good ? Color.green : Color.red)).opacity(0.14), in: Capsule())
-        .accessibilityLabel(percent >= 0 ? "Up \(percent) percent" : "Down \(abs(percent)) percent")
-    }
-}
-
-struct KindIcon: View {
-    var kind: LeadKind
-    var size: CGFloat = 36
-
-    var color: Color {
-        switch kind {
-        case .form: return .blue
-        case .call: return .green
-        case .missed: return .red
-        case .phone: return .teal
-        }
-    }
+/// Square monogram for companies and sites.
+struct Monogram: View {
+    var name: String
+    var size: CGFloat = 44
 
     var body: some View {
-        Image(systemName: kind.symbol)
-            .font(.system(size: size * 0.42, weight: .semibold))
-            .foregroundStyle(.white)
+        let colors = Theme.avatarColors(name)
+        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+            .fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
             .frame(width: size, height: size)
-            .background(color.gradient, in: Circle())
-            .accessibilityLabel(kind.label)
+            .overlay {
+                Text(Fmt.initials(name) ?? "?")
+                    .font(.system(size: size * 0.36, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).strokeBorder(.white.opacity(0.18), lineWidth: 0.5)
+            }
+            .accessibilityHidden(true)
     }
 }
 
-struct StatusBadge: View {
-    var status: String?
+struct LeadAvatar: View {
+    var lead: Lead
+    var size: CGFloat = 44
 
     var body: some View {
-        Text(Fmt.statusLabel(status))
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .foregroundStyle(Fmt.statusColor(status))
-            .background(Fmt.statusColor(status).opacity(0.14), in: Capsule())
+        let hasName = !(lead.name?.trimmed.isEmpty ?? true)
+        Avatar(name: hasName ? lead.title : "", size: size, symbol: lead.leadKind.isCall ? "phone.fill" : "person.fill")
+            .overlay(alignment: .bottomTrailing) {
+                Image(systemName: lead.leadKind.symbol)
+                    .font(.system(size: size * 0.2, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: size * 0.42, height: size * 0.42)
+                    .background(Theme.tint(for: lead.leadKind).gradient, in: Circle())
+                    .overlay { Circle().strokeBorder(Color(.secondarySystemGroupedBackground), lineWidth: 2) }
+                    .offset(x: 3, y: 3)
+            }
     }
 }
 
-struct Pill: View {
+struct Chip: View {
     var text: String
     var color: Color
+    var symbol: String? = nil
 
     var body: some View {
-        Text(text)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .foregroundStyle(color)
-            .background(color.opacity(0.14), in: Capsule())
+        HStack(spacing: 3) {
+            if let symbol { Image(systemName: symbol).font(.system(size: 9, weight: .bold)) }
+            Text(text)
+        }
+        .font(.caption2.weight(.semibold))
+        .lineLimit(1)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .foregroundStyle(color)
+        .background(color.opacity(0.13), in: Capsule())
     }
 }
+
+struct StatusChip: View {
+    var status: String?
+    var body: some View { Chip(text: Fmt.statusLabel(status), color: Fmt.statusColor(status)) }
+}
+
+struct FilterChip: View {
+    var title: String
+    var count: Int?
+    var isOn: Bool
+    var color: Color = Theme.violet
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Text(title)
+                if let count {
+                    Text("\(count)")
+                        .monospacedDigit()
+                        .opacity(isOn ? 0.85 : 0.55)
+                        .contentTransition(.numericText(value: Double(count)))
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .foregroundStyle(isOn ? Color.white : Color.primary)
+            .background {
+                Capsule().fill(isOn ? AnyShapeStyle(color.gradient) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)))
+            }
+            .overlay { Capsule().strokeBorder(Color.primary.opacity(isOn ? 0 : 0.08), lineWidth: 0.5) }
+        }
+        .buttonStyle(.pressable)
+        .sensoryFeedback(.selection, trigger: isOn)
+    }
+}
+
+// MARK: Lead row
 
 struct LeadRow: View {
     var lead: Lead
     var showClient = true
+    var timeStyle: TimeStyle = .clock
+
+    enum TimeStyle { case clock, ago }
 
     var body: some View {
-        HStack(spacing: 12) {
-            KindIcon(kind: lead.leadKind)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+        HStack(alignment: .top, spacing: 12) {
+            LeadAvatar(lead: lead)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
                     Text(lead.title)
-                        .font(.body.weight(.medium))
+                        .font(.body.weight(.semibold))
                         .lineLimit(1)
-                    if lead.isTestLead { Pill(text: "Test", color: .orange) }
+                    Spacer(minLength: 6)
+                    Text(timeStyle == .ago ? Fmt.ago(lead.date) : Fmt.time(lead.date))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
                 }
                 Text(subtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(Fmt.time(lead.date))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                if let s = lead.status, s != "new" { StatusBadge(status: s) }
+                if let snippet {
+                    Text(snippet)
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+                HStack(spacing: 5) {
+                    Chip(text: kindText, color: Theme.tint(for: lead.leadKind), symbol: lead.leadKind.symbol)
+                    if let s = lead.status, s != "new" { StatusChip(status: s) }
+                    if lead.status == nil || lead.status == "new", let d = lead.date, Date().timeIntervalSince(d) < 86_400 {
+                        Chip(text: "New", color: Theme.info, symbol: "sparkle")
+                    }
+                    if lead.isTestLead { Chip(text: "Test", color: Theme.warn) }
+                }
+                .padding(.top, 2)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var kindText: String {
+        if lead.leadKind == .call, let d = Fmt.duration(lead.durationS) { return "Call \(d)" }
+        return lead.leadKind.label
     }
 
     private var subtitle: String {
         var parts: [String] = []
-        if showClient, let c = lead.client { parts.append(c) }
+        if showClient, let c = lead.client, lead.clientId != "orphaned" { parts.append(c) }
         if let d = lead.domain { parts.append(d) }
-        if parts.isEmpty { parts.append(lead.leadKind.label) }
+        if parts.isEmpty { parts.append(Fmt.sourceLabel(lead.source)) }
         return parts.joined(separator: " · ")
+    }
+
+    private var snippet: String? {
+        guard let m = lead.message?.trimmed, !m.isEmpty else { return nil }
+        let lines = m.split(separator: "\n").map { String($0).trimmed }.filter { !$0.isEmpty }
+        // Prefer the free text over "Key: value" form fields.
+        let free = lines.last { !$0.contains(":") } ?? lines.first
+        return free
     }
 }
 
-struct LeadsChart: View {
-    var points: [ChartPoint]
-    var height: CGFloat = 170
+// MARK: Charts
+
+struct Sparkline: View {
+    var values: [Double]
+    var color: Color = Theme.violet
+    var lineWidth: CGFloat = 2
+    var fill = true
 
     var body: some View {
-        Chart(points) { p in
-            BarMark(
-                x: .value("Day", p.day, unit: .day),
-                y: .value("Leads", p.count)
-            )
-            .foregroundStyle(by: .value("Type", p.series))
-            .cornerRadius(2)
+        let top = max(values.max() ?? 1, 1)
+        Chart {
+            ForEach(Array(values.enumerated()), id: \.offset) { item in
+                if fill {
+                    AreaMark(x: .value("i", item.offset), y: .value("v", item.element))
+                        .foregroundStyle(LinearGradient(colors: [color.opacity(0.35), color.opacity(0)], startPoint: .top, endPoint: .bottom))
+                        .interpolationMethod(.catmullRom)
+                }
+                LineMark(x: .value("i", item.offset), y: .value("v", item.element))
+                    .foregroundStyle(color)
+                    .lineStyle(StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+                    .interpolationMethod(.catmullRom)
+            }
         }
-        .chartForegroundStyleScale(["Forms": Color.blue, "Calls": Color.green])
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .chartLegend(.hidden)
+        .chartYScale(domain: 0...(top * 1.08))
+        .accessibilityHidden(true)
+    }
+}
+
+/// Small bar sparkline used on tiles.
+struct MiniBars: View {
+    var values: [Double]
+    var color: Color = Theme.violet
+
+    var body: some View {
+        let top = max(values.max() ?? 1, 1)
+        GeometryReader { geo in
+            let n = max(values.count, 1)
+            let gap: CGFloat = 2
+            let w = max(1, (geo.size.width - gap * CGFloat(n - 1)) / CGFloat(n))
+            HStack(alignment: .bottom, spacing: gap) {
+                ForEach(Array(values.enumerated()), id: \.offset) { item in
+                    RoundedRectangle(cornerRadius: min(w / 2, 2), style: .continuous)
+                        .fill(item.element > 0 ? AnyShapeStyle(color.gradient) : AnyShapeStyle(color.opacity(0.15)))
+                        .frame(width: w, height: max(2, geo.size.height * CGFloat(item.element / top)))
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .bottom)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+enum ChartGranularity { case day, week }
+
+/// Stacked lead bars with press and drag scrubbing, like Stocks and Health.
+struct LeadsBarChart: View {
+    var data: [DayValue]
+    var granularity: ChartGranularity = .day
+    @Binding var selection: Date?
+    var height: CGFloat = 200
+
+    private var unit: Calendar.Component { granularity == .day ? .day : .weekOfYear }
+
+    private func matches(_ d: DayValue) -> Bool {
+        guard let selection else { return true }
+        return Calendar.current.isDate(d.day, equalTo: selection, toGranularity: unit)
+    }
+
+    var body: some View {
+        Chart {
+            ForEach(data) { d in
+                let dim = selection != nil && !matches(d)
+                BarMark(x: .value("Day", d.day, unit: unit), y: .value("Leads", d.forms))
+                    .foregroundStyle(by: .value("Type", "Forms"))
+                    .opacity(dim ? 0.3 : 1)
+                BarMark(x: .value("Day", d.day, unit: unit), y: .value("Leads", d.calls))
+                    .foregroundStyle(by: .value("Type", "Calls"))
+                    .opacity(dim ? 0.3 : 1)
+                BarMark(x: .value("Day", d.day, unit: unit), y: .value("Leads", d.missed))
+                    .foregroundStyle(by: .value("Type", "Missed"))
+                    .opacity(dim ? 0.3 : 1)
+            }
+            if let sel = data.first(where: { selection != nil && matches($0) }) {
+                RuleMark(x: .value("Day", sel.day, unit: unit))
+                    .foregroundStyle(Color.primary.opacity(0.12))
+                    .lineStyle(StrokeStyle(lineWidth: 1))
+                    .zIndex(-1)
+            }
+        }
+        .chartForegroundStyleScale(["Forms": Theme.forms, "Calls": Theme.calls, "Missed": Theme.missed])
+        .chartLegend(.hidden)
+        .chartXSelection(value: $selection)
         .chartXAxis {
-            AxisMarks(values: .stride(by: .day, count: 7)) { _ in
-                AxisGridLine()
-                AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+            AxisMarks(values: .automatic(desiredCount: 5)) { _ in
+                AxisValueLabel(format: .dateTime.day().month(.abbreviated), centered: false)
+                    .foregroundStyle(Color.secondary)
             }
         }
         .chartYAxis {
-            AxisMarks(position: .leading)
+            AxisMarks(position: .trailing, values: .automatic(desiredCount: 4)) { _ in
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
+                    .foregroundStyle(Color.secondary.opacity(0.4))
+                AxisValueLabel().foregroundStyle(Color.secondary)
+            }
         }
-        .chartLegend(position: .top, alignment: .trailing)
         .frame(height: height)
-        .accessibilityLabel("Leads per day")
+        .sensoryFeedback(.selection, trigger: selection.map { Calendar.current.startOfDay(for: $0) })
+        .accessibilityLabel("Leads chart")
     }
 }
 
-struct SectionCard<Content: View>: View {
+/// Legend dots for forms, calls and missed calls.
+struct LeadLegend: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            dot("Forms", Theme.forms)
+            dot("Calls", Theme.calls)
+            dot("Missed", Theme.missed)
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(.secondary)
+    }
+
+    private func dot(_ t: String, _ c: Color) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(c).frame(width: 7, height: 7)
+            Text(t)
+        }
+    }
+}
+
+/// A chart card header that shows totals, or the scrubbed value while dragging.
+struct ScrubHeader: View {
     var title: String
-    var trailing: String?
-    @ViewBuilder var content: Content
+    var value: String
+    var detail: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title).font(.headline)
-                Spacer()
-                if let trailing {
-                    Text(trailing).font(.subheadline).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title.uppercased())
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .tracking(0.6)
+            Text(value)
+                .font(.rounded(30))
+                .contentTransition(.numericText())
+                .monospacedDigit()
+            Text(detail)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .contentTransition(.opacity)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct RangePicker<T: Hashable>: View {
+    var options: [(T, String)]
+    @Binding var selection: T
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options.indices, id: \.self) { i in
+                let opt = options[i]
+                let on = opt.0 == selection
+                Button {
+                    withAnimation(.snappy) { selection = opt.0 }
+                } label: {
+                    Text(opt.1)
+                        .font(.caption.weight(.bold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .foregroundStyle(on ? Color.primary : Color.secondary)
+                        .background {
+                            if on {
+                                Capsule().fill(Color(.systemBackground))
+                                    .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(Color(.tertiarySystemFill), in: Capsule())
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+}
+
+// MARK: Section chrome
+
+struct SectionHeader: View {
+    var title: String
+    var subtitle: String? = nil
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.title3.weight(.bold))
+                if let subtitle {
+                    Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
                 }
             }
-            content
+            Spacer()
+            if let actionTitle, let action {
+                Button(action: action) {
+                    HStack(spacing: 2) {
+                        Text(actionTitle)
+                        Image(systemName: "chevron.right").font(.caption.weight(.bold))
+                    }
+                    .font(.subheadline.weight(.semibold))
+                }
+            }
         }
-        .padding(16)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(.horizontal, 4)
+        .padding(.top, 8)
+    }
+}
+
+struct MetricTile: View {
+    var title: String
+    var symbol: String
+    var tint: Color
+    var value: String
+    var extra: String? = nil
+    var percent: Int? = nil
+    var upIsGood = true
+    var caption: String? = nil
+    var spark: [Double] = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 22, height: 22)
+                    .background(tint.gradient, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                Text(value)
+                    .font(.rounded(24))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .contentTransition(.numericText())
+                if let extra {
+                    Text("+ \(extra)")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+            HStack(alignment: .bottom, spacing: 6) {
+                if percent != nil {
+                    DeltaChip(percent: percent, upIsGood: upIsGood)
+                } else if let caption {
+                    Text(caption)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 0)
+                if spark.count > 1 {
+                    Sparkline(values: spark, color: tint, lineWidth: 1.6)
+                        .frame(width: 64, height: 26)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
+        .card(padding: 14)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: Loading, empty and error states
+
+struct Shimmer: ViewModifier {
+    @State private var phase: CGFloat = -0.7
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                GeometryReader { geo in
+                    LinearGradient(colors: [.clear, .white.opacity(0.35), .clear], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: geo.size.width * 0.5)
+                        .offset(x: phase * geo.size.width)
+                }
+                .mask(content)
+                .allowsHitTesting(false)
+            }
+            .onAppear {
+                withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) { phase = 1.2 }
+            }
+    }
+}
+
+extension View {
+    func shimmering() -> some View { modifier(Shimmer()) }
+}
+
+struct SkeletonBlock: View {
+    var width: CGFloat? = nil
+    var height: CGFloat = 12
+    var radius: CGFloat = 6
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(Color(.tertiarySystemFill))
+            .frame(width: width, height: height)
+    }
+}
+
+struct SkeletonRows: View {
+    var count = 6
+
+    var body: some View {
+        VStack(spacing: 18) {
+            ForEach(0..<count, id: \.self) { i in
+                HStack(spacing: 12) {
+                    Circle().fill(Color(.tertiarySystemFill)).frame(width: 44, height: 44)
+                    VStack(alignment: .leading, spacing: 7) {
+                        SkeletonBlock(width: CGFloat(120 + (i * 37) % 80), height: 13)
+                        SkeletonBlock(width: CGFloat(170 + (i * 53) % 70), height: 10)
+                        SkeletonBlock(width: 60, height: 14, radius: 7)
+                    }
+                    Spacer()
+                }
+            }
+        }
+        .shimmering()
+        .accessibilityLabel("Loading")
+    }
+}
+
+struct EmptyState: View {
+    var symbol: String
+    var title: String
+    var message: String
+    var tint: Color = Theme.violet
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle().fill(tint.opacity(0.12)).frame(width: 96, height: 96)
+                Circle().fill(tint.opacity(0.18)).frame(width: 68, height: 68)
+                Image(systemName: symbol)
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(tint.gradient)
+            }
+            Text(title).font(.title3.weight(.bold))
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 280)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(.borderedProminent)
+                    .tint(tint)
+                    .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
     }
 }
 
@@ -210,49 +633,23 @@ struct ErrorBanner: View {
     var message: String
 
     var body: some View {
-        Label(message, systemImage: "exclamationmark.triangle.fill")
-            .font(.footnote)
-            .foregroundStyle(.orange)
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-
-/// Grey rows shown while the first load runs.
-struct SkeletonRows: View {
-    var count = 8
-
-    var body: some View {
-        ForEach(0..<count, id: \.self) { _ in
-            HStack(spacing: 12) {
-                Circle().fill(Color(.systemFill)).frame(width: 36, height: 36)
-                VStack(alignment: .leading, spacing: 6) {
-                    RoundedRectangle(cornerRadius: 4).fill(Color(.systemFill)).frame(width: 150, height: 12)
-                    RoundedRectangle(cornerRadius: 4).fill(Color(.tertiarySystemFill)).frame(width: 210, height: 10)
-                }
-                Spacer()
-            }
-            .padding(.vertical, 4)
+        HStack(spacing: 10) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.warn)
+            Text(message)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.primary)
+            Spacer(minLength: 0)
         }
-        .shimmering()
-        .accessibilityLabel("Loading")
+        .padding(12)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.warn.opacity(0.35), lineWidth: 0.5) }
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
 
-struct Shimmer: ViewModifier {
-    @State private var on = false
-    func body(content: Content) -> some View {
-        content
-            .opacity(on ? 0.45 : 1)
-            .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: on)
-            .onAppear { on = true }
-    }
-}
-
-extension View {
-    func shimmering() -> some View { modifier(Shimmer()) }
-}
+// MARK: Toolbar
 
 /// Shared toolbar menu: refresh state, web admin, sign out.
 struct AccountMenu: View {
@@ -279,11 +676,18 @@ struct AccountMenu: View {
                 Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
             }
         } label: {
-            if store.isRefreshing {
-                ProgressView()
-            } else {
-                Image(systemName: "person.crop.circle")
+            ZStack {
+                if store.isRefreshing {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Text("AZ")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(Theme.hero, in: Circle())
+                }
             }
+            .frame(width: 32, height: 32)
         }
         .accessibilityLabel("Account")
         .confirmationDialog("Sign out of Lead Gen?", isPresented: $confirmSignOut, titleVisibility: .visible) {
@@ -294,21 +698,32 @@ struct AccountMenu: View {
     }
 }
 
+// MARK: Navigation
+
 /// Lead, client and site screens are reachable from every tab.
 struct AppDestinations: ViewModifier {
+    var ns: Namespace.ID
+
     func body(content: Content) -> some View {
         content
-            .navigationDestination(for: Lead.self) { LeadDetailView(lead: $0) }
-            .navigationDestination(for: Client.self) { ClientDetailView(clientId: $0.clientId) }
-            .navigationDestination(for: Site.self) { SiteDetailView(domain: $0.domain) }
+            .environment(\.zoomNamespace, ns)
+            .navigationDestination(for: Lead.self) { lead in
+                LeadDetailView(lead: lead).zoomDestination("lead-\(lead.id)", ns).environment(\.zoomNamespace, ns)
+            }
+            .navigationDestination(for: Client.self) { c in
+                ClientDetailView(clientId: c.clientId).zoomDestination("client-\(c.clientId)", ns).environment(\.zoomNamespace, ns)
+            }
+            .navigationDestination(for: Site.self) { s in
+                SiteDetailView(domain: s.domain).zoomDestination("site-\(s.domain)", ns).environment(\.zoomNamespace, ns)
+            }
             .navigationDestination(for: LeadFilterRoute.self) { route in
-                LeadsListView(filter: route.filter, title: route.title)
+                LeadsListView(filter: route.filter, title: route.title).environment(\.zoomNamespace, ns)
             }
     }
 }
 
 extension View {
-    func appDestinations() -> some View { modifier(AppDestinations()) }
+    func appDestinations(_ ns: Namespace.ID) -> some View { modifier(AppDestinations(ns: ns)) }
 }
 
 struct LeadFilterRoute: Hashable {

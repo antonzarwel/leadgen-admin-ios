@@ -127,4 +127,71 @@ enum Fmt {
         guard let e = email?.trimmed, e.contains("@") else { return nil }
         return URL(string: "mailto:\(e)")
     }
+
+    /// Short age like "5 min", "3 h", "2 d".
+    static func ago(_ date: Date?) -> String {
+        guard let date else { return "" }
+        let s = max(0, Date().timeIntervalSince(date))
+        if s < 60 { return "Now" }
+        if s < 3600 { return "\(Int(s / 60)) min" }
+        if s < 86_400 { return "\(Int(s / 3600)) h" }
+        if s < 7 * 86_400 { return "\(Int(s / 86_400)) d" }
+        return date.formatted(.dateTime.day().month(.abbreviated))
+    }
+
+    /// Swedish style phone grouping: 073 904 78 06 or +46 73 904 78 06.
+    static func phone(_ raw: String?) -> String {
+        guard let raw = raw?.trimmed, !raw.isEmpty else { return "" }
+        let digits = raw.filter { $0.isNumber }
+        func group(_ s: String) -> String {
+            let c = Array(s)
+            guard c.count == 9 else { return s }
+            return "\(String(c[0..<2])) \(String(c[2..<5])) \(String(c[5..<7])) \(String(c[7..<9]))"
+        }
+        if raw.hasPrefix("+46") || (digits.hasPrefix("46") && digits.count == 11) {
+            return "+46 " + group(String(digits.dropFirst(2)))
+        }
+        if digits.hasPrefix("0") && digits.count == 10 {
+            let c = Array(digits)
+            return "\(String(c[0..<3])) \(String(c[3..<6])) \(String(c[6..<8])) \(String(c[8..<10]))"
+        }
+        return raw
+    }
+
+    /// Primary and secondary parts of a two currency amount, EUR first when present.
+    static func moneyParts(_ m: Money?) -> (main: String, extra: String?) {
+        let m = m ?? .zero
+        if m.eur != 0 && m.sek != 0 { return (eur(m.eur), sek(m.sek)) }
+        if m.eur != 0 { return (eur(m.eur), nil) }
+        return (sek(m.sek), nil)
+    }
+
+    static func initials(_ s: String) -> String? {
+        let words = s.split(whereSeparator: { $0 == " " || $0 == "." || $0 == "@" }).filter { $0.first?.isLetter == true }
+        guard let first = words.first?.first else { return nil }
+        if words.count > 1, let second = words[1].first { return String([first, second]).uppercased() }
+        return String(first).uppercased()
+    }
+
+    static func greeting(_ date: Date = Date()) -> String {
+        let h = Calendar.current.component(.hour, from: date)
+        switch h {
+        case 5..<12: return "Good morning"
+        case 12..<18: return "Good afternoon"
+        default: return "Good evening"
+        }
+    }
+
+    static func sourceLabel(_ source: String?) -> String {
+        switch source ?? "" {
+        case "telavox": return "Phone call"
+        case "custom_form": return "Website form"
+        case "directory-form": return "Directory form"
+        case "typeform": return "Typeform"
+        case "jotform": return "Jotform"
+        case "phone": return "Added by hand"
+        case "": return "Unknown"
+        case let s: return s.replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ").capitalized
+        }
+    }
 }

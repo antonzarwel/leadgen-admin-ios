@@ -19,6 +19,7 @@ final class AppStore {
     var leads: [Lead] = []
     var clients: [Client] = []
     var sites: [Site] = []
+    var index = LeadIndex()
 
     var lastUpdated: Date?
     var isRefreshing = false
@@ -59,6 +60,7 @@ final class AppStore {
         token = nil
         summary = nil
         leads = []
+        index = LeadIndex()
         clients = []
         sites = []
         lastUpdated = nil
@@ -156,6 +158,7 @@ final class AppStore {
         if let data = DiskCache.load("leads"), let l = try? d.decode(LeadsResponse.self, from: data) { leads = l.leads ?? [] }
         if let data = DiskCache.load("clients"), let c = try? d.decode(ClientsResponse.self, from: data) { clients = c.clients ?? [] }
         if let data = DiskCache.load("sites"), let s = try? d.decode(SitesResponse.self, from: data) { sites = s.sites ?? [] }
+        index = LeadIndex(leads)
         if let s = summary?.generatedAt { lastUpdated = Fmt.parse(s) }
     }
 
@@ -183,10 +186,12 @@ final class AppStore {
         let results = await (s, l, c, st)
 
         var firstError: Error?
-        switch results.0 { case .success(let v): summary = v; case .failure(let e): firstError = firstError ?? e }
-        switch results.1 { case .success(let v): leads = v.leads ?? []; case .failure(let e): firstError = firstError ?? e }
-        switch results.2 { case .success(let v): clients = v.clients ?? []; case .failure(let e): firstError = firstError ?? e }
-        switch results.3 { case .success(let v): sites = v.sites ?? []; case .failure(let e): firstError = firstError ?? e }
+        withAnimation(.smooth(duration: 0.6)) {
+            switch results.0 { case .success(let v): summary = v; case .failure(let e): firstError = firstError ?? e }
+            switch results.1 { case .success(let v): leads = v.leads ?? []; index = LeadIndex(leads); case .failure(let e): firstError = firstError ?? e }
+            switch results.2 { case .success(let v): clients = v.clients ?? []; case .failure(let e): firstError = firstError ?? e }
+            switch results.3 { case .success(let v): sites = v.sites ?? []; case .failure(let e): firstError = firstError ?? e }
+        }
 
         if let firstError {
             if let apiError = firstError as? APIError, case .unauthorized = apiError {
@@ -216,31 +221,4 @@ final class AppStore {
         guard let domain else { return nil }
         return sites.first { $0.domain == domain }
     }
-
-    /// Daily lead counts for the last `days` days from the local lead list.
-    func daily(days: Int, matching: (Lead) -> Bool) -> [ChartPoint] {
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: Date())
-        var forms: [Date: Int] = [:]
-        var calls: [Date: Int] = [:]
-        for lead in leads where !lead.isTestLead && matching(lead) {
-            guard let d = lead.date else { continue }
-            let day = cal.startOfDay(for: d)
-            if lead.leadKind.isCall { calls[day, default: 0] += 1 } else { forms[day, default: 0] += 1 }
-        }
-        var out: [ChartPoint] = []
-        for i in stride(from: days - 1, through: 0, by: -1) {
-            guard let day = cal.date(byAdding: .day, value: -i, to: today) else { continue }
-            out.append(ChartPoint(day: day, series: "Forms", count: forms[day] ?? 0))
-            out.append(ChartPoint(day: day, series: "Calls", count: calls[day] ?? 0))
-        }
-        return out
-    }
-}
-
-struct ChartPoint: Identifiable, Hashable {
-    var day: Date
-    var series: String
-    var count: Int
-    var id: String { "\(day.timeIntervalSince1970)-\(series)" }
 }
