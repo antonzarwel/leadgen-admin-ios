@@ -185,6 +185,12 @@ extension AppStore {
         return Analytics.count(realLeads, from: start, to: .distantFuture)
     }
 
+    /// Companies that accepted a card since midnight. Historic CRM "won" rows do not count.
+    var acceptedToday: Int {
+        let start = Analytics.cal.startOfDay(for: Date())
+        return realLeads.reduce(0) { $0 + ($1.accepted(since: start) ? 1 : 0) }
+    }
+
     /// Yesterday up to the same time of day, so the comparison is fair.
     var leadsYesterdaySoFar: Int {
         let now = Date()

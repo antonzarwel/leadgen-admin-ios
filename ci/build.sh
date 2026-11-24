@@ -7,14 +7,18 @@ set -euo pipefail
 APP_DIR=ios/LeadGen
 PROJECT=$APP_DIR/LeadGen.xcodeproj
 SCHEME=LeadGen
-for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 APPLE_TEAM_ID; do
-  [ -n "${!v:-}" ] || { echo "::error::secret $v is not set"; exit 1; }
-done
-KEYDIR="$RUNNER_TEMP/keys"; mkdir -p "$KEYDIR"
-KEY="$KEYDIR/AuthKey_${ASC_KEY_ID}.p8"
-printf '%s\n' "$ASC_KEY_P8" > "$KEY"; chmod 600 "$KEY"
-trap 'rm -rf "$KEYDIR"' EXIT
-AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+# UPLOAD=0 archives only (pull requests). A push to main uploads to TestFlight.
+UPLOAD="${UPLOAD:-1}"
+if [ "$UPLOAD" != "0" ]; then
+  for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 APPLE_TEAM_ID; do
+    [ -n "${!v:-}" ] || { echo "::error::secret $v is not set"; exit 1; }
+  done
+  KEYDIR="$RUNNER_TEMP/keys"; mkdir -p "$KEYDIR"
+  KEY="$KEYDIR/AuthKey_${ASC_KEY_ID}.p8"
+  printf '%s\n' "$ASC_KEY_P8" > "$KEY"; chmod 600 "$KEY"
+  trap 'rm -rf "$KEYDIR"' EXIT
+  AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+fi
 
 sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
 xcodebuild -version
@@ -32,13 +36,18 @@ xcodebuild archive \
   -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
   -destination "generic/platform=iOS" \
   -archivePath "$RUNNER_TEMP/App.xcarchive" \
-  DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+  DEVELOPMENT_TEAM="${APPLE_TEAM_ID:-}" \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" > "$RUNNER_TEMP/archive.log" 2>&1
 rc=$?
 set -e
 grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)" "$RUNNER_TEMP/archive.log" | sort -u | head -200 || true
 [ $rc -eq 0 ] && [ -d "$RUNNER_TEMP/App.xcarchive" ] || { tail -120 "$RUNNER_TEMP/archive.log"; exit 1; }
+echo "Archive build number $BUILD_NUMBER"
+if [ "$UPLOAD" = "0" ]; then
+  echo "Archive succeeded. Upload skipped."
+  exit 0
+fi
 
 sed "s/__TEAM_ID__/${APPLE_TEAM_ID}/" ci/ExportOptions.plist.template > "$RUNNER_TEMP/ExportOptions.plist"
 xcodebuild -exportArchive \

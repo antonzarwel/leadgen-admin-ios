@@ -78,7 +78,10 @@ struct APIClient {
         do {
             let (data, resp) = try await Self.session.data(for: req)
             return (data, (resp as? HTTPURLResponse)?.statusCode ?? 0)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let e as URLError {
+            if e.code == .cancelled { throw CancellationError() }
             switch e.code {
             case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed:
                 throw APIError.network("You are offline. Showing the last saved data.")
@@ -88,6 +91,14 @@ struct APIClient {
                 throw APIError.network(e.localizedDescription)
             }
         }
+    }
+}
+
+enum Endpoint {
+    static func path(_ path: String, _ items: [URLQueryItem] = []) -> String {
+        guard var components = URLComponents(string: path) else { return path }
+        if !items.isEmpty { components.queryItems = items }
+        return components.string ?? path
     }
 }
 
