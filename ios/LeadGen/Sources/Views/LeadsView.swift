@@ -1062,10 +1062,10 @@ struct LeadDetailView: View {
                     Chip(text: billing, color: shown.billingColor)
                 }
             }
-            if let max = shown.slots?.max, max > 0 {
+            if let slotMax = shown.slots?.max, slotMax > 0 {
                 let won = shown.slots?.won ?? shown.acceptedCount ?? 0
-                let left = shown.slotsLeft ?? max(0, max - won)
-                Text("\(won) of \(max) slots filled · \(left) left")
+                let left = shown.slotsLeft ?? Swift.max(0, slotMax - won)
+                Text("\(won) of \(slotMax) slots filled · \(left) left")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

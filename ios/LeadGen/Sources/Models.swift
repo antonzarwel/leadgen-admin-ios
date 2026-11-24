@@ -164,13 +164,13 @@ struct LeadPage: Decodable {
             cursor = page.flexString(.nextCursor) ?? page.flexString(.next) ?? page.flexString(.cursor)
             if more == nil { more = page.flexBool(.hasMore) }
         }
-        if let cursor, cursor.isEmpty { cursor = nil }
+        if cursor?.isEmpty == true { cursor = nil }
         leads = rows
         nextCursor = cursor
         if let more {
-            hasMore = more && cursor != nil
+            hasMore = more && nextCursor != nil
         } else {
-            hasMore = cursor != nil
+            hasMore = nextCursor != nil
         }
         total = c.flexInt(.total)
         sites = (try? c.decode([Soft<LeadSiteOption>].self, forKey: .sites))?.compactMap(\.value) ?? []
