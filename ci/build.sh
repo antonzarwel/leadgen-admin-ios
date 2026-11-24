@@ -56,3 +56,5 @@ xcodebuild -exportArchive \
   -exportPath "$RUNNER_TEMP/export" "${AUTH[@]}" 2>&1 | tee "$RUNNER_TEMP/export.log"
 test "${PIPESTATUS[0]}" -eq 0
 echo "Uploaded build $BUILD_NUMBER to App Store Connect"
+
+# Retry note: hosted macOS runners can drop a queued job; this comment retriggers the upload.
