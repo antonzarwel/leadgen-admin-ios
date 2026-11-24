@@ -212,8 +212,12 @@ struct LeadRow: View {
                 }
                 HStack(spacing: 5) {
                     Chip(text: kindText, color: Theme.tint(for: lead.leadKind), symbol: lead.leadKind.symbol)
-                    if let s = lead.status, s != "new" { StatusChip(status: s) }
-                    if lead.status == nil || lead.status == "new", let d = lead.date, Date().timeIntervalSince(d) < 86_400 {
+                    if lead.hasCardMetadata {
+                        Chip(text: lead.pillText, color: lead.pillColor)
+                    } else if let s = lead.status, s != "new" {
+                        StatusChip(status: s)
+                    }
+                    if !lead.hasCardMetadata, (lead.status == nil || lead.status == "new"), let d = lead.date, Date().timeIntervalSince(d) < 86_400 {
                         Chip(text: "New", color: Theme.info, symbol: "sparkle")
                     }
                     if lead.isTestLead { Chip(text: "Test", color: Theme.warn) }
@@ -232,8 +236,10 @@ struct LeadRow: View {
 
     private var subtitle: String {
         var parts: [String] = []
-        if showClient, let c = lead.client, lead.clientId != "orphaned" { parts.append(c) }
+        if showClient, let c = lead.client, !lead.isUnassigned { parts.append(c) }
+        if let service = lead.inferredService, service.caseInsensitiveCompare(lead.title) != .orderedSame { parts.append(service) }
         if let d = lead.domain { parts.append(d) }
+        if let loc = lead.inferredLocation { parts.append(loc) }
         if parts.isEmpty { parts.append(Fmt.sourceLabel(lead.source)) }
         return parts.joined(separator: " · ")
     }
@@ -572,6 +578,33 @@ struct SkeletonBlock: View {
     }
 }
 
+struct SkeletonLeadCards: View {
+    var count = 6
+
+    var body: some View {
+        VStack(spacing: 22) {
+            ForEach(0..<count, id: \.self) { i in
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        SkeletonBlock(width: 88, height: 18, radius: 9)
+                        Spacer()
+                        SkeletonBlock(width: 42, height: 12)
+                    }
+                    SkeletonBlock(width: CGFloat(150 + (i * 29) % 90), height: 16)
+                    SkeletonBlock(width: CGFloat(190 + (i * 17) % 60), height: 12)
+                    HStack(spacing: 6) {
+                        SkeletonBlock(width: 64, height: 18, radius: 9)
+                        SkeletonBlock(width: 72, height: 18, radius: 9)
+                    }
+                    SkeletonBlock(height: 36, radius: 12)
+                }
+            }
+        }
+        .shimmering()
+        .accessibilityLabel("Loading leads")
+    }
+}
+
 struct SkeletonRows: View {
     var count = 6
 
@@ -717,7 +750,8 @@ struct AppDestinations: ViewModifier {
                 SiteDetailView(domain: s.domain).zoomDestination("site-\(s.domain)", ns).environment(\.zoomNamespace, ns)
             }
             .navigationDestination(for: LeadFilterRoute.self) { route in
-                LeadsListView(filter: route.filter, title: route.title).environment(\.zoomNamespace, ns)
+                LeadCardsScreen(starting: route.filter, baseline: route.filter, title: route.title, isRoot: false)
+                    .environment(\.zoomNamespace, ns)
             }
     }
 }

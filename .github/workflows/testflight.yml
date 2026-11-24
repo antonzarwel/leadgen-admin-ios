@@ -6,13 +6,16 @@ name: TestFlight
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths: ["ci/**", "ios/**", "www/**", "capacitor.config.*", "package.json", "package-lock.json"]
   push:
     branches: [main]
     paths: ["ci/**", "ios/**", "www/**", "capacitor.config.*", "package.json", "package-lock.json"]
 
 concurrency:
-  group: testflight
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('testflight-pr-{0}', github.event.pull_request.number) || 'testflight' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -31,6 +34,7 @@ jobs:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           RUN_NUMBER: ${{ github.run_number }}
+          UPLOAD: ${{ github.event_name == 'pull_request' && '0' || '1' }}
         run: bash ci/build.sh
       - name: Upload logs
         if: always()
