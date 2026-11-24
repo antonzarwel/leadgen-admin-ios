@@ -7,7 +7,7 @@ set -euo pipefail
 APP_DIR=ios/LeadGen
 PROJECT=$APP_DIR/LeadGen.xcodeproj
 SCHEME=LeadGen
-# UPLOAD=0 archives only (pull requests). The push to main uploads to TestFlight.
+# UPLOAD=0 archives only (pull requests). A push to main uploads to TestFlight.
 UPLOAD="${UPLOAD:-1}"
 if [ "$UPLOAD" != "0" ]; then
   for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 APPLE_TEAM_ID; do
